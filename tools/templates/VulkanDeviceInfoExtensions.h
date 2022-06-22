@@ -68,25 +68,9 @@ private:
     };
     void pushFeature2(const char* extension, std::string name, bool supported);
     bool extensionSupported(const char* extensionName);
-    void readPhysicalFeatures_AMD();
-    void readPhysicalProperties_AMD();
-    void readPhysicalFeatures_ARM();
-    void readPhysicalFeatures_EXT();
-    void readPhysicalProperties_EXT();
-    void readPhysicalFeatures_HUAWEI();
-    void readPhysicalProperties_HUAWEI();
-    void readPhysicalFeatures_INTEL();
-    void readPhysicalFeatures_KHR();
-    void readPhysicalProperties_KHR();
-    void readPhysicalFeatures_NV();
-    void readPhysicalProperties_NV();
-    void readPhysicalProperties_NVX();
-    void readPhysicalFeatures_QCOM();
-    void readPhysicalProperties_QCOM();
-    void readPhysicalFeatures_VALVE();
-
+{{header_functions}}
 public:
-    const uint32_t vkHeaderVersion = 215;
+    const uint32_t vkHeaderVersion = {{VK_HEADER_VERSION}};
     std::vector<Feature2> features2;
     std::vector<Property2> properties2;
     std::vector<VkExtensionProperties> extensions;

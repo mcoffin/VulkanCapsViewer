@@ -5,14 +5,43 @@
 #include <QApplication>
 #include <QtGlobal>
 
+void logMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg)
+{
+    QString msgType;
+    switch (type) {
+    case QtInfoMsg:
+        msgType = "Info";
+        break;
+    case QtDebugMsg:
+        msgType = "Debug";
+        break;
+    case QtWarningMsg:
+        msgType = "Warning";
+        break;
+    case QtCriticalMsg:
+        msgType = "Critical";
+        break;
+    case QtFatalMsg:
+        msgType = "Fatal";
+        break;
+    }
+    QDateTime timeStamp = QDateTime::currentDateTime();
+    QString logMessage = QString("%1: %2: %3").arg(timeStamp.toString("yyyy-MM-dd hh:mm:ss.zzz")).arg(msgType).arg(msg);
+    QFile logFile("log.txt");
+    if (logFile.open(QIODevice::WriteOnly | QIODevice::Append)) {
+        QTextStream textStream(&logFile);
+        textStream << logMessage << endl;
+    };
+}
+
 int main(int argc, char *argv[])
 {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
 
-    QApplication a(argc, argv);
-    a.setApplicationVersion(QString::fromStdString(vulkanCapsViewer::version));
+    QApplication application(argc, argv);
+    application.setApplicationVersion(VulkanCapsViewer::version);
 
     QCommandLineParser parser;  
 
@@ -22,6 +51,8 @@ int main(int argc, char *argv[])
     QCommandLineOption optionUploadReportSubmitter("submitter", "Set optional submitter name for report upload", "submitter", "");
     QCommandLineOption optionUploadReportComment("comment", "Set optional comment for report upload", "comment", "");
     QCommandLineOption optionDBConnection("d", "Load database connection information from an .ini file", "db.ini", "");
+    QCommandLineOption optionLogFile("log", "Write log messages to a text file for debugging (log.txt)");
+    QCommandLineOption optionDisableProxy("noproxy", "Run withouth proxy (overrides setting)");
 
     parser.setApplicationDescription("Vulkan Hardware Capability Viewer");
     parser.addHelpOption();
@@ -32,7 +63,9 @@ int main(int argc, char *argv[])
     parser.addOption(optionUploadReportDeviceIndex);
     parser.addOption(optionUploadReportSubmitter);
     parser.addOption(optionUploadReportComment);
-    parser.process(a);
+    parser.addOption(optionLogFile);
+    parser.addOption(optionDisableProxy);
+    parser.process(application);
 
     // Custom database settings can be applied via a .ini file
     if (parser.isSet(optionDBConnection))
@@ -47,11 +80,21 @@ int main(int argc, char *argv[])
         }
     }
 
-    vulkanCapsViewer w;
+    if (parser.isSet(optionLogFile)) {
+        qInstallMessageHandler(logMessageHandler);
+    }
+
+    settings.restore();
+    if (parser.isSet(optionDisableProxy)) {
+        settings.proxyEnabled = false;
+        settings.applyProxySettings();
+    }
+
+    VulkanCapsViewer vulkanCapsViewer;
 
     if (parser.isSet(optionSaveReport))
     {
-        w.exportReportAsJSON(parser.value(optionSaveReport).toStdString(), "", "");
+        vulkanCapsViewer.saveReport(parser.value(optionSaveReport), "", "");
         return 0;
     }
 
@@ -69,10 +112,11 @@ int main(int argc, char *argv[])
         if (parser.isSet(optionUploadReportComment)) {
             comment = parser.value(optionUploadReportComment);
         }
-        int res = w.uploadReportNonVisual(deviceIndex, submitter, comment);
+        int res = vulkanCapsViewer.uploadReportNonVisual(deviceIndex, submitter, comment);
         return res;
     }
 
-    w.show();
-    return a.exec();
+    qInfo() << "Application start";
+    vulkanCapsViewer.show();
+    return application.exec();
 }

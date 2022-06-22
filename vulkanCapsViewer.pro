@@ -16,7 +16,11 @@ INCLUDEPATH += "/Vulkan-Headers/include"
 win32 {
     DEFINES += WIN64
     DEFINES += VK_USE_PLATFORM_WIN32_KHR
-    LIBS += "$$PWD/libs/vulkan/vulkan-1.lib"
+    win32:contains(QMAKE_HOST.arch, x86_64) {
+        LIBS += "$$PWD/libs/vulkan/lib/vulkan-1.lib"
+    } else {
+        LIBS += "$$PWD/libs/vulkan/lib32/vulkan-1.lib"
+    }
     LIBS += Advapi32.lib
 }
 linux:!android {
@@ -49,14 +53,30 @@ android {
     CONFIG += mobility
     MOBILITY =
     LIBS += -landroid
+    ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+
+    DISTFILES += \
+        android/AndroidManifest.xml \
+        android/build.gradle \
+        android/res/values/libs.xml
 }
 macx {
     DEFINES += VK_USE_PLATFORM_MACOS_MVK
     VULKAN_DYLIB = /usr/local/lib/libvulkan.1.dylib
     LIBS += $$VULKAN_DYLIB -framework Cocoa -framework QuartzCore
-    OBJECTIVE_SOURCES += makeviewmetal.mm
+    OBJECTIVE_SOURCES += appleutils.mm
     ICON = $${PWD}/vulkanCapsViewer.icns
 }
+ios {
+    TARGET = "Vulkan Caps Viewer"
+    QMAKE_INFO_PLIST = iOS/Info.plist
+    DEFINES += VK_USE_PLATFORM_IOS_MVK
+    LIBS += /Users/lunarg/dev/VulkanSDK/MoltenVK/MoltenVk.xcframework/ios-arm64/libMoltenVK.a
+    LIBS += -framework QuartzCore
+    OBJECTIVE_SOURCES += appleutils.mm
+    ICON = $${PWD}/iOS/vulkanCapsViewer.png
+    }
+
 DEPENDPATH += .
 MOC_DIR += ./GeneratedFiles/release
 OBJECTS_DIR += release
@@ -71,14 +91,13 @@ SOURCES +=
 
 DISTFILES += \
     android/AndroidManifest.xml \
+    android/gradle.properties \
     android/gradle/wrapper/gradle-wrapper.jar \
     android/gradlew \
     android/res/values/libs.xml \
     android/build.gradle \
     android/gradle/wrapper/gradle-wrapper.properties \
     android/gradlew.bat
-
-ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
 
 contains(ANDROID_TARGET_ARCH,armeabi-v7a) {
     ANDROID_EXTRA_LIBS = \

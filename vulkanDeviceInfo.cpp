@@ -4,7 +4,7 @@
 *
 * Device information class
 *
-* Copyright (C) 2016-2020 by Sascha Willems (www.saschawillems.de)
+* Copyright (C) 2016-2022 by Sascha Willems (www.saschawillems.de)
 *
 * This code is free software, you can redistribute it and/or
 * modify it under the terms of the GNU Lesser General Public
@@ -41,9 +41,17 @@ bool VulkanDeviceInfo::vulkan_1_2()
     return ((major > 1) || ((major == 1) && (minor >= 2)));
 }
 
+bool VulkanDeviceInfo::vulkan_1_3()
+{
+    uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
+    uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
+    return ((major > 1) || ((major == 1) && (minor >= 3)));
+}
+
 void VulkanDeviceInfo::readExtensions()
 {
     assert(device != NULL);
+    qInfo() << "Reading extensions";
     VkResult vkRes;
     do {
         uint32_t extCount;
@@ -70,6 +78,7 @@ bool VulkanDeviceInfo::extensionSupported(const char* extensionName)
 void VulkanDeviceInfo::readLayers()
 {
     assert(device != NULL);
+    qInfo() << "Reading layers";
     VkResult vkRes;
     do {
         uint32_t layerCount;
@@ -107,6 +116,7 @@ void VulkanDeviceInfo::readLayers()
 void VulkanDeviceInfo::readSupportedFormats()
 {
     assert(device != NULL);
+    qInfo() << "Reading formats";
     // Base formats
     int32_t firstFormat = VK_FORMAT_R4G4_UNORM_PACK8;
     int32_t lastFormat = VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
@@ -114,10 +124,7 @@ void VulkanDeviceInfo::readSupportedFormats()
         VulkanFormatInfo formatInfo = {};
         formatInfo.format = (VkFormat)format;
         vkGetPhysicalDeviceFormatProperties(device, formatInfo.format, &formatInfo.properties);
-        formatInfo.supported =
-            (formatInfo.properties.linearTilingFeatures != 0) |
-            (formatInfo.properties.optimalTilingFeatures != 0) |
-            (formatInfo.properties.bufferFeatures != 0);
+        formatInfo.supported = (formatInfo.properties.linearTilingFeatures != 0) || (formatInfo.properties.optimalTilingFeatures != 0) || (formatInfo.properties.bufferFeatures != 0);
         formats.push_back(formatInfo);
     }
     // VK_KHR_sampler_ycbcr_conversion
@@ -126,46 +133,39 @@ void VulkanDeviceInfo::readSupportedFormats()
             VulkanFormatInfo formatInfo = {};
             formatInfo.format = (VkFormat)format;
             vkGetPhysicalDeviceFormatProperties(device, formatInfo.format, &formatInfo.properties);
-            formatInfo.supported =
-                (formatInfo.properties.linearTilingFeatures != 0) |
-                (formatInfo.properties.optimalTilingFeatures != 0) |
-                (formatInfo.properties.bufferFeatures != 0);
+            formatInfo.supported = (formatInfo.properties.linearTilingFeatures != 0) || (formatInfo.properties.optimalTilingFeatures != 0) || (formatInfo.properties.bufferFeatures != 0);
+            formats.push_back(formatInfo);
+        }
+    }
+    // VK_IMG_FORMAT_PVRTC_EXTENSION_NAME
+    if (extensionSupported(VK_IMG_FORMAT_PVRTC_EXTENSION_NAME)) {
+        for (int32_t format = VK_FORMAT_PVRTC1_2BPP_UNORM_BLOCK_IMG; format < VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG; format++) {
+            VulkanFormatInfo formatInfo = {};
+            formatInfo.format = (VkFormat)format;
+            vkGetPhysicalDeviceFormatProperties(device, formatInfo.format, &formatInfo.properties);
+            formatInfo.supported = (formatInfo.properties.linearTilingFeatures != 0) || (formatInfo.properties.optimalTilingFeatures != 0) || (formatInfo.properties.bufferFeatures != 0);
             formats.push_back(formatInfo);
         }
     }
 }
 
-void VulkanDeviceInfo::readQueueFamilies()
+void VulkanDeviceInfo::readQueueFamilies(VkSurfaceKHR surface)
 {
     assert(device != NULL);
-    uint32_t queueCount;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueCount, NULL);
-    assert(queueCount > 0);
-    std::vector<VkQueueFamilyProperties> qs(queueCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueCount, &qs.front());
+    qInfo() << "Reading queue families";
+    uint32_t queueFamilyCount;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
+    assert(queueFamilyCount > 0);
+    std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, &queueFamilyProperties.front());
     uint32_t index = 0;
-    for (auto& q : qs)
+    for (auto& queueFamilyProperty : queueFamilyProperties)
     {
         VulkanQueueFamilyInfo queueFamilyInfo{};
-        queueFamilyInfo.properties = q;
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-        queueFamilyInfo.supportsPresent = vkGetPhysicalDeviceWin32PresentationSupportKHR(device, index);
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-        // On Android all physical devices and queue families must support present
-        queueFamilyInfo.supportsPresent = true;
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-        // @todo: Not properly working
-        /*
-        if (w) {
-            xcb_connection_t *connection = w->xcbScreen()->xcb_connection();
-            queueFamilyInfo.supportsPresent = vkGetPhysicalDeviceXcbPresentationSupportKHR(device, index, connection, w->visualId());
-        } else {
-            qWarning("Could not get valid XCB Window handle to check queue present support!");
-            queueFamilyInfo.supportsPresent = false;
+        queueFamilyInfo.properties = queueFamilyProperty;
+        if ((surface != VK_NULL_HANDLE) && (pfnGetPhysicalDeviceSurfaceSupportKHR)) {
+            pfnGetPhysicalDeviceSurfaceSupportKHR(device, index, surface, &queueFamilyInfo.supportsPresent);
         }
-        */
-        queueFamilyInfo.supportsPresent = false;
-#endif
         queueFamilies.push_back(queueFamilyInfo);
         index++;
     }
@@ -208,6 +208,8 @@ void VulkanDeviceInfo::readPhysicalProperties()
 {
     assert(device != NULL);
     vkGetPhysicalDeviceProperties(device, &props);
+
+    qInfo().nospace() << "Device \"" << props.deviceName << "\"";
 
     properties.clear();
     properties["deviceName"] = props.deviceName;
@@ -271,6 +273,8 @@ void VulkanDeviceInfo::readPhysicalProperties()
             deviceProps2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
 
             // Core 1.1
+            qInfo() << "Reading Vulkan 1.1 core properties";
+
             VkPhysicalDeviceVulkan11Properties coreProps11{};
             coreProps11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
             deviceProps2.pNext = &coreProps11;
@@ -295,6 +299,8 @@ void VulkanDeviceInfo::readPhysicalProperties()
 
 
             // Core 1.2
+            qInfo() << "Reading Vulkan 1.2 core properties";
+
             VkPhysicalDeviceVulkan12Properties coreProps12{};
             coreProps12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
             deviceProps2.pNext = &coreProps12;
@@ -355,12 +361,74 @@ void VulkanDeviceInfo::readPhysicalProperties()
             core12Properties["framebufferIntegerColorSampleCounts"] = coreProps12.framebufferIntegerColorSampleCounts;
 
         }
+
+        // Vulkan 1.3
+        if (vulkan_1_3()) {
+            // Core 1.3
+            qInfo() << "Reading Vulkan 1.3 core properties";
+
+            VkPhysicalDeviceProperties2KHR deviceProps2{};
+            deviceProps2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
+
+            VkPhysicalDeviceVulkan13Properties coreProps13{};
+            coreProps13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
+            deviceProps2.pNext = &coreProps13;
+            pfnGetPhysicalDeviceProperties2KHR(device, &deviceProps2);
+
+            core13Properties.clear();
+			core13Properties["minSubgroupSize"] = coreProps13.minSubgroupSize;
+			core13Properties["maxSubgroupSize"] = coreProps13.maxSubgroupSize;
+			core13Properties["maxComputeWorkgroupSubgroups"] = coreProps13.maxComputeWorkgroupSubgroups;
+			core13Properties["requiredSubgroupSizeStages"] = coreProps13.requiredSubgroupSizeStages;
+			core13Properties["maxInlineUniformBlockSize"] = coreProps13.maxInlineUniformBlockSize;
+			core13Properties["maxPerStageDescriptorInlineUniformBlocks"] = coreProps13.maxPerStageDescriptorInlineUniformBlocks;
+			core13Properties["maxPerStageDescriptorUpdateAfterBindInlineUniformBlocks"] = coreProps13.maxPerStageDescriptorUpdateAfterBindInlineUniformBlocks;
+			core13Properties["maxDescriptorSetInlineUniformBlocks"] = coreProps13.maxDescriptorSetInlineUniformBlocks;
+			core13Properties["maxDescriptorSetUpdateAfterBindInlineUniformBlocks"] = coreProps13.maxDescriptorSetUpdateAfterBindInlineUniformBlocks;
+			core13Properties["maxInlineUniformTotalSize"] = coreProps13.maxInlineUniformTotalSize;
+			core13Properties["integerDotProduct8BitUnsignedAccelerated"] = coreProps13.integerDotProduct8BitUnsignedAccelerated;
+			core13Properties["integerDotProduct8BitSignedAccelerated"] = coreProps13.integerDotProduct8BitSignedAccelerated;
+			core13Properties["integerDotProduct8BitMixedSignednessAccelerated"] = coreProps13.integerDotProduct8BitMixedSignednessAccelerated;
+			core13Properties["integerDotProduct4x8BitPackedUnsignedAccelerated"] = coreProps13.integerDotProduct4x8BitPackedUnsignedAccelerated;
+			core13Properties["integerDotProduct4x8BitPackedSignedAccelerated"] = coreProps13.integerDotProduct4x8BitPackedSignedAccelerated;
+			core13Properties["integerDotProduct4x8BitPackedMixedSignednessAccelerated"] = coreProps13.integerDotProduct4x8BitPackedMixedSignednessAccelerated;
+			core13Properties["integerDotProduct16BitUnsignedAccelerated"] = coreProps13.integerDotProduct16BitUnsignedAccelerated;
+			core13Properties["integerDotProduct16BitSignedAccelerated"] = coreProps13.integerDotProduct16BitSignedAccelerated;
+			core13Properties["integerDotProduct16BitMixedSignednessAccelerated"] = coreProps13.integerDotProduct16BitMixedSignednessAccelerated;
+			core13Properties["integerDotProduct32BitUnsignedAccelerated"] = coreProps13.integerDotProduct32BitUnsignedAccelerated;
+			core13Properties["integerDotProduct32BitSignedAccelerated"] = coreProps13.integerDotProduct32BitSignedAccelerated;
+			core13Properties["integerDotProduct32BitMixedSignednessAccelerated"] = coreProps13.integerDotProduct32BitMixedSignednessAccelerated;
+			core13Properties["integerDotProduct64BitUnsignedAccelerated"] = coreProps13.integerDotProduct64BitUnsignedAccelerated;
+			core13Properties["integerDotProduct64BitSignedAccelerated"] = coreProps13.integerDotProduct64BitSignedAccelerated;
+			core13Properties["integerDotProduct64BitMixedSignednessAccelerated"] = coreProps13.integerDotProduct64BitMixedSignednessAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating8BitUnsignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating8BitUnsignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating8BitSignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating8BitSignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating8BitMixedSignednessAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating8BitMixedSignednessAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating4x8BitPackedUnsignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating4x8BitPackedUnsignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating4x8BitPackedSignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating4x8BitPackedSignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating4x8BitPackedMixedSignednessAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating4x8BitPackedMixedSignednessAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating16BitUnsignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating16BitUnsignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating16BitSignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating16BitSignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating16BitMixedSignednessAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating16BitMixedSignednessAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating32BitUnsignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating32BitUnsignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating32BitSignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating32BitSignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating32BitMixedSignednessAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating32BitMixedSignednessAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating64BitUnsignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating64BitUnsignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating64BitSignedAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating64BitSignedAccelerated;
+			core13Properties["integerDotProductAccumulatingSaturating64BitMixedSignednessAccelerated"] = coreProps13.integerDotProductAccumulatingSaturating64BitMixedSignednessAccelerated;
+            core13Properties["storageTexelBufferOffsetAlignmentBytes"] = QVariant::fromValue(coreProps13.storageTexelBufferOffsetAlignmentBytes);
+			core13Properties["storageTexelBufferOffsetSingleTexelAlignment"] = coreProps13.storageTexelBufferOffsetSingleTexelAlignment;
+            core13Properties["uniformTexelBufferOffsetAlignmentBytes"] = QVariant::fromValue(coreProps13.uniformTexelBufferOffsetAlignmentBytes);
+            core13Properties["uniformTexelBufferOffsetSingleTexelAlignment"] = QVariant::fromValue(coreProps13.uniformTexelBufferOffsetSingleTexelAlignment);
+            core13Properties["maxBufferSize"] = QVariant::fromValue(coreProps13.maxBufferSize).toString();
+        }
     }
 }
 
 void VulkanDeviceInfo::readPhysicalFeatures()
 {
     assert(device != NULL);
+    qInfo() << "Reading physical feattures";
     vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
     features.clear();
@@ -449,6 +517,8 @@ void VulkanDeviceInfo::readPhysicalFeatures()
             deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
 
             // Core 1.1
+            qInfo() << "Reading Vulkan 1.1 core features";
+
             VkPhysicalDeviceVulkan11Features coreFeatures11{};
             coreFeatures11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
             deviceFeatures2.pNext = &coreFeatures11;
@@ -469,6 +539,8 @@ void VulkanDeviceInfo::readPhysicalFeatures()
             core11Features["shaderDrawParameters"] = coreFeatures11.shaderDrawParameters;
 
             // Core 1.2
+            qInfo() << "Reading Vulkan 1.2 core features";
+
             VkPhysicalDeviceVulkan12Features coreFeatures12{};
             coreFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
             deviceFeatures2.pNext = &coreFeatures12;
@@ -524,11 +596,43 @@ void VulkanDeviceInfo::readPhysicalFeatures()
             core12Features["subgroupBroadcastDynamicId"] = coreFeatures12.subgroupBroadcastDynamicId;
         }
 
+        // Vulkan 1.3
+        if (vulkan_1_3()) {
+            // Core 1.3
+            qInfo() << "Reading Vulkan 1.3 core features";
+
+            VkPhysicalDeviceFeatures2KHR deviceFeatures2{};
+            deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
+
+            VkPhysicalDeviceVulkan13Features coreFeatures13{};
+            coreFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+            deviceFeatures2.pNext = &coreFeatures13;
+            pfnGetPhysicalDeviceFeatures2KHR(device, &deviceFeatures2);
+
+            core13Features.clear();
+            core13Features["robustImageAccess"] = coreFeatures13.robustImageAccess;
+            core13Features["inlineUniformBlock"] = coreFeatures13.inlineUniformBlock;
+            core13Features["descriptorBindingInlineUniformBlockUpdateAfterBind"] = coreFeatures13.descriptorBindingInlineUniformBlockUpdateAfterBind;
+            core13Features["pipelineCreationCacheControl"] = coreFeatures13.pipelineCreationCacheControl;
+            core13Features["privateData"] = coreFeatures13.privateData;
+            core13Features["shaderDemoteToHelperInvocation"] = coreFeatures13.shaderDemoteToHelperInvocation;
+            core13Features["shaderTerminateInvocation"] = coreFeatures13.shaderTerminateInvocation;
+            core13Features["subgroupSizeControl"] = coreFeatures13.subgroupSizeControl;
+            core13Features["computeFullSubgroups"] = coreFeatures13.computeFullSubgroups;
+            core13Features["synchronization2"] = coreFeatures13.synchronization2;
+            core13Features["textureCompressionASTC_HDR"] = coreFeatures13.textureCompressionASTC_HDR;
+            core13Features["shaderZeroInitializeWorkgroupMemory"] = coreFeatures13.shaderZeroInitializeWorkgroupMemory;
+            core13Features["dynamicRendering"] = coreFeatures13.dynamicRendering;
+            core13Features["shaderIntegerDotProduct"] = coreFeatures13.shaderIntegerDotProduct;
+            core13Features["maintenance4"] = coreFeatures13.maintenance4;
+        }
+
     }
 }
 
 void VulkanDeviceInfo::readPhysicalLimits()
 {
+    qInfo() << "Reading limits";
     using vulkanResources::toHexQString;
 
     limits.clear();
@@ -643,12 +747,14 @@ void VulkanDeviceInfo::readPhysicalLimits()
 void VulkanDeviceInfo::readPhysicalMemoryProperties()
 {
     assert(device != NULL);
+    qInfo() << "Reading memory properties";
     vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
 }
 
 void VulkanDeviceInfo::readSurfaceInfo(VkSurfaceKHR surface, std::string surfaceExtension)
 {
     assert(device != NULL);
+    qInfo() << "Reading surface info";
     surfaceInfo.validSurface = (surface != VK_NULL_HANDLE);
     surfaceInfo.surfaceExtension = surfaceExtension;
     surfaceInfo.get(device, surface);
@@ -671,6 +777,7 @@ void VulkanDeviceInfo::readPlatformDetails()
 {
     // Android specific build info
 #if defined(__ANDROID__)
+    qInfo() << "Reading platform details";
     platformdetails["android.ProductModel"] = getSystemProperty("ro.product.model");
     platformdetails["android.ProductManufacturer"] = getSystemProperty("ro.product.manufacturer");
     platformdetails["android.BuildID"] = getSystemProperty("ro.build.id");
@@ -679,7 +786,31 @@ void VulkanDeviceInfo::readPlatformDetails()
 #endif
 }
 
-QJsonObject VulkanDeviceInfo::toJson(std::string submitter, std::string comment)
+void VulkanDeviceInfo::readProfiles(VkInstance instance)
+{
+    qInfo() << "Reading profiles";
+
+    std::vector<VpProfileProperties> availableProfiles{};
+    uint32_t profilesCount;
+    if (vpGetProfiles(&profilesCount, nullptr) == VK_SUCCESS) {
+        availableProfiles.resize(profilesCount);
+        vpGetProfiles(&profilesCount, availableProfiles.data());
+    }
+
+    profiles.clear();
+    for (VpProfileProperties& profile : availableProfiles) {
+        qInfo() << "Reading profile" << profile.profileName;
+        VkBool32 supported = VK_FALSE;
+        vpGetPhysicalDeviceProfileSupport(instance, device, &profile, &supported);
+        VulkanProfileInfo profileInfo{};
+        profileInfo.profileName = profile.profileName;
+        profileInfo.specVersion = profile.specVersion;
+        profileInfo.supported = supported;
+        profiles.push_back(profileInfo);
+    }
+}
+
+QJsonObject VulkanDeviceInfo::toJson(QString submitter, QString comment)
 {
     QJsonObject root;
 
@@ -729,6 +860,18 @@ QJsonObject VulkanDeviceInfo::toJson(std::string submitter, std::string comment)
             jsonCore12["features"] = QJsonObject::fromVariantMap(core12Features);
         }
         root["core12"] = jsonCore12;
+    }
+
+    // Core 1.3
+    if ((!core13Properties.empty()) || (!core13Features.empty())) {
+        QJsonObject jsonCore13;
+        if (!core13Properties.empty()) {
+            jsonCore13["properties"] = QJsonObject::fromVariantMap(core13Properties);
+        }
+        if (!core13Features.empty()) {
+            jsonCore13["features"] = QJsonObject::fromVariantMap(core13Features);
+        }
+        root["core13"] = jsonCore13;
     }
 
     // Extensions
@@ -864,6 +1007,18 @@ QJsonObject VulkanDeviceInfo::toJson(std::string submitter, std::string comment)
     }
     root["surfacecapabilites"] = jsonSurfaceCaps;
 
+    // Profiles
+    QJsonArray jsonProfiles;
+    for (auto& profile : profiles)
+    {
+        QJsonObject jsonProfile;
+        jsonProfile["profileName"] = QString::fromStdString(profile.profileName);
+        jsonProfile["specVersion"] = int(profile.specVersion);
+        jsonProfile["supported"] = profile.supported;
+        jsonProfiles.append(jsonProfile);
+    }
+    root["profiles"] = jsonProfiles;
+
     // Platform specific details
     QJsonObject jsonPlatformDetail;
     for (auto& detail : platformdetails)
@@ -877,10 +1032,10 @@ QJsonObject VulkanDeviceInfo::toJson(std::string submitter, std::string comment)
     jsonEnv["name"] = QString::fromStdString(os.name);
     jsonEnv["version"] = QString::fromStdString(os.version);
     jsonEnv["architecture"] = QString::fromStdString(os.architecture);
-    jsonEnv["submitter"] = QString::fromStdString(submitter);
-    jsonEnv["comment"] = QString::fromStdString(comment);
-    jsonEnv["reportversion"] = QString::fromStdString(reportVersion);
-    jsonEnv["appversion"] = QString::fromStdString(appVersion);
+    jsonEnv["submitter"] = submitter;
+    jsonEnv["comment"] = comment;
+    jsonEnv["reportversion"] = reportVersion;
+    jsonEnv["appversion"] = appVersion;
     root["environment"] = jsonEnv;
 
     QJsonObject jsonExtended;

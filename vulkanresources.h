@@ -4,7 +4,7 @@
 *
 * Helpers converting Vulkan entities to strings
 *
-* Copyright (C) 2015-2020 by Sascha Willems (www.saschawillems.de)
+* Copyright (C) 2015-2021 by Sascha Willems (www.saschawillems.de)
 *
 * This code is free software, you can redistribute it and/or
 * modify it under the terms of the GNU Lesser General Public
@@ -388,6 +388,14 @@ namespace vulkanResources {
 			STR(G16_B16_R16_3PLANE_422_UNORM);
 			STR(G16_B16R16_2PLANE_422_UNORM);
 			STR(G16_B16_R16_3PLANE_444_UNORM);
+			STR(PVRTC1_2BPP_UNORM_BLOCK_IMG);
+			STR(PVRTC1_4BPP_UNORM_BLOCK_IMG);
+			STR(PVRTC2_2BPP_UNORM_BLOCK_IMG);
+			STR(PVRTC2_4BPP_UNORM_BLOCK_IMG);
+			STR(PVRTC1_2BPP_SRGB_BLOCK_IMG);
+			STR(PVRTC1_4BPP_SRGB_BLOCK_IMG);
+			STR(PVRTC2_2BPP_SRGB_BLOCK_IMG);
+			STR(PVRTC2_4BPP_SRGB_BLOCK_IMG);
 #undef STR
 		default: return "UNKNOWN_ENUM (" + toHexString(format) + ")";
 		}
@@ -523,7 +531,7 @@ namespace vulkanResources {
 		};
 	}
 
-	inline std::string memoryHeapBitString(const VkMemoryPropertyFlagBits heapBit)
+	inline std::string memoryHeapBitString(const VkMemoryHeapFlagBits heapBit)
 	{
 		switch (heapBit) {
 #define STR(r) case VK_MEMORY_HEAP_##r: return #r
@@ -543,6 +551,8 @@ namespace vulkanResources {
 			STR(TRANSFER_BIT);
 			STR(SPARSE_BINDING_BIT);
 			STR(PROTECTED_BIT);
+			STR(VIDEO_DECODE_BIT_KHR);
+			STR(VIDEO_ENCODE_BIT_KHR);
 #undef STR
 		default: return "UNKNOWN_FLAG (" + toHexString(queueBit) + ")";
 		};
@@ -666,7 +676,38 @@ namespace vulkanResources {
 		"independentResolveNone",
 		"independentResolve",
 		"filterMinmaxSingleComponentFormats",
-		"filterMinmaxImageComponentMapping"
+		"filterMinmaxImageComponentMapping",
+		// Core 1.3
+		"integerDotProduct16BitMixedSignednessAccelerated",
+		"integerDotProduct16BitSignedAccelerated",
+		"integerDotProduct16BitUnsignedAccelerated",
+		"integerDotProduct32BitMixedSignednessAccelerated",
+		"integerDotProduct32BitSignedAccelerated",
+		"integerDotProduct32BitUnsignedAccelerated",
+		"integerDotProduct4x8BitPackedMixedSignednessAccelerated",
+		"integerDotProduct4x8BitPackedSignedAccelerated",
+		"integerDotProduct4x8BitPackedUnsignedAccelerated",
+		"integerDotProduct64BitMixedSignednessAccelerated",
+		"integerDotProduct64BitSignedAccelerated",
+		"integerDotProduct64BitUnsignedAccelerated",
+		"integerDotProduct8BitMixedSignednessAccelerated",
+		"integerDotProduct8BitSignedAccelerated",
+		"integerDotProduct8BitUnsignedAccelerated",
+		"integerDotProductAccumulatingSaturating16BitMixedSignednessAccelerated",
+		"integerDotProductAccumulatingSaturating16BitSignedAccelerated",
+		"integerDotProductAccumulatingSaturating16BitUnsignedAccelerated",
+		"integerDotProductAccumulatingSaturating32BitMixedSignednessAccelerated",
+		"integerDotProductAccumulatingSaturating32BitSignedAccelerated",
+		"integerDotProductAccumulatingSaturating32BitUnsignedAccelerated",
+		"integerDotProductAccumulatingSaturating4x8BitPackedMixedSignednessAccelerated",
+		"integerDotProductAccumulatingSaturating4x8BitPackedSignedAccelerated",
+		"integerDotProductAccumulatingSaturating4x8BitPackedUnsignedAccelerated",
+		"integerDotProductAccumulatingSaturating64BitMixedSignednessAccelerated",
+		"integerDotProductAccumulatingSaturating64BitSignedAccelerated",
+		"integerDotProductAccumulatingSaturating64BitUnsignedAccelerated",
+		"integerDotProductAccumulatingSaturating8BitMixedSignednessAccelerated",
+		"integerDotProductAccumulatingSaturating8BitSignedAccelerated",
+		"integerDotProductAccumulatingSaturating8BitUnsignedAccelerated"
 	};
 
 	// Values to be displayed as UUIds
@@ -694,7 +735,7 @@ namespace vulkanResources {
 	// Key replacement for display
 	const QMap<QString, QString> replaceKeyNames = {
 		{ "apiVersionText", "apiVersion" },
-		{ "deviceTypeText", "driverVersion" },
+		{ "deviceTypeText", "deviceType" },
 		{ "driverVersionText", "driverVersion" },
 	};
 
